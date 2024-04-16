@@ -3,58 +3,69 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <strings.h>
+#include <cstring>
+#include <unistd.h>
+#include <arpa/inet.h>
 
-#define SERVER_PORT 5432
-#define MAX_LINE 256
+#define TCP_PORT 54321
+#define UDP_PORT 12345
+#define MAX_LINE 1024
 
-int main(int argc, char *argv[]){
+//int argc, char *argv[]
+int main(){
 
-    FILE *fp;
-    struct hostent *hp;
-    struct sockaddr_in sin;
-    char *host;
-    char buff[MAX_LINE];
-    int sock;
-    int len;
 
-    if(argc==2){
-        host = argv[1];
-    }
-    else{
-        std::cerr << "usage: simplex-talk host" << std::endl; 
+    int tcpSocket, udpSocket;
+    struct sockaddr_in tcpServerAddr, udpServerAddr;
+    char buffer[MAX_LINE];
+
+    if ((tcpSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        std::perror("Error creating TCP socket.");
         std::exit(1);
     }
 
-    hp = gethostbyname(host);
-    if(!hp){
-        std::cerr << "simplex-talk: unknow host " << host << std::endl;
+    memset(&tcpServerAddr, 0, sizeof(tcpServerAddr));
+    tcpServerAddr.sin_family = AF_INET;
+    tcpServerAddr.sin_port = htons(TCP_PORT);
+
+    if (connect(tcpSocket, (const struct sockaddr *)&tcpServerAddr, sizeof(tcpServerAddr)) < 0) {
+        std::perror("Error connecting TCP socket.");
         std::exit(1);
     }
 
-    bzero((char *)&sin, sizeof(sin));
-    sin.sin_family = AF_INET;
-    bcopy(hp->h_addr, (char *) &sin.sin_addr, hp->h_length);
-    sin.sin_port = htons(SERVER_PORT);
+    const char *tcpMessage = "Message via TCP";
+    send(tcpSocket, tcpMessage, strlen(tcpMessage), 0);
+    std::cout << "Data sent via TCP." << std::endl;
 
-    if((sock = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
-        std::perror("simplex-talk: socket");
+    close(tcpSocket);
+
+    if ((udpSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        std::perror("Error creating UDP socket.");
         std::exit(1);
     }
 
-    if ( connect(sock, (struct sockaddr *) &sin, sizeof(sin) ) < 0 ) {
-                std::perror("simplex-talk: connect"); 
-                std::exit(1);
-        }
+    memset(&udpServerAddr, 0, sizeof(udpServerAddr));
+    udpServerAddr.sin_family = AF_INET;
+    udpServerAddr.sin_port = htons(UDP_PORT);
+    udpServerAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    //udpServerAddr.sin_addr.s_addr = inet_addr(""); // Endereço IP específico
 
-
-    std::cout << "**Socket created" << std::endl;
-    std::cout << sizeof(buff);
-    while(fgets(buff, sizeof(buff), stdin)){
-        std::cout << sizeof(buff);
-        buff[MAX_LINE-1] = '\0';
-        len = sizeof(buff) + 1;
-        send(sock, buff, len, 0);
+    if (bind(udpSocket, (const struct sockaddr *)&udpServerAddr, sizeof(udpServerAddr)) < 0) {
+        perror("Error connecting UDP socket.");
+        std::exit(1);
     }
 
+    socklen_t addrSize = sizeof(udpServerAddr);
+    ssize_t bytesReceived = recvfrom(udpSocket, buffer, MAX_LINE, 0, (struct sockaddr *)&udpServerAddr, &addrSize);
+    if (bytesReceived < 0) {
+        perror("Error receiving UDP data.");
+        std::exit(1);
+    }
+
+    buffer[bytesReceived] = '\0';
+    std::cout << "Data received via UDP: " << buffer << std::endl;
+
+    close(udpSocket);
+    
     return 0;
 }
