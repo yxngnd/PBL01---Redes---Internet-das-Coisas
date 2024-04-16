@@ -21,8 +21,7 @@ public:
     void setIntensity(int newIntensity);
     int getIntensity() const;
     void setColor(Color newColor);
-    Color getColor() const;
-
+    std::string getColor() const;
     void displayStatus() const;
 };
 

@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
+#define SERVER_IP "127.0.0.1"
 #define TCP_PORT 54321
 #define UDP_PORT 12345
 #define MAX_LINE 1024
@@ -47,8 +48,8 @@ int main(){
     memset(&udpServerAddr, 0, sizeof(udpServerAddr));
     udpServerAddr.sin_family = AF_INET;
     udpServerAddr.sin_port = htons(UDP_PORT);
-    udpServerAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    //udpServerAddr.sin_addr.s_addr = inet_addr(""); // Endereço IP específico
+    //udpServerAddr.sin_addr.s_addr = htonl(INADDR_ANY); // Qualquer endereço IP
+    udpServerAddr.sin_addr.s_addr = inet_addr("SERVER_IP"); // Endereço IP específico
 
     if (bind(udpSocket, (const struct sockaddr *)&udpServerAddr, sizeof(udpServerAddr)) < 0) {
         perror("Error connecting UDP socket.");
