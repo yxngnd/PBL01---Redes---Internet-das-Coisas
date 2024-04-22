@@ -14,7 +14,7 @@ private:
     Color color;
 
 public:
-    LightBulb(bool on = false, int intensity = 0, Color color = Color::WHITE);
+    LightBulb(bool on, int intensity, Color color);
 
     void setOn(bool state);
     bool getOn() const;
