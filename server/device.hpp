@@ -9,13 +9,16 @@ enum class Color { WHITE, RED, PURPLE, BLUE };
 
 class LightBulb {
 private:
+    int id;
     bool on;
     int intensity;
     Color color;
 
 public:
-    LightBulb(bool on, int intensity, Color color);
+    LightBulb(int id, bool on, int intensity, Color color);
 
+    void setId(bool newId);
+    int getId();
     void setOn(bool state);
     bool getOn() const;
     void setIntensity(int newIntensity);
