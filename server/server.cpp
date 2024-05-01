@@ -18,21 +18,70 @@ using json = nlohmann::json;
 using tcp = boost::asio::ip::tcp;
 namespace http = boost::beast::http;
 
-void handleRequest(http::request<http::string_body>& request, tcp::socket& socket) {
+void handlePostRequest(http::request<http::string_body>& request, tcp::socket& socket) {
+    // Parse JSON from request body
+    json receivedData = json::parse(request.body());
+
+    // Perform some action with received data
+    // Here you can edit data or perform any other action based on the received data
+
     // Prepare the response message
     http::response<http::string_body> response;
     response.version(request.version());
     response.result(http::status::ok);
     response.set(http::field::server, "My HTTP Server");
     response.set(http::field::content_type, "text/plain");
-    response.body() = "Hello, World!";
+    response.body() = "Data successfully updated!";
     response.prepare_payload();
 
     // Send the response to the client
     boost::beast::http::write(socket, response);
 }
 
-void runServer() {
+void handleGetRequest(http::request<http::string_body>& request, tcp::socket& socket) {
+    // Prepare some data to send
+    json data;
+    data["nome"] = "Maria";
+    data["idade"] = 25;
+
+    // Convert data to JSON string
+    std::string jsonData = data.dump();
+
+    // Prepare the response message
+    http::response<http::string_body> response;
+    response.version(request.version());
+    response.result(http::status::ok);
+    response.set(http::field::server, "My HTTP Server");
+    response.set(http::field::content_type, "application/json");
+    response.body() = jsonData;
+    response.prepare_payload();
+
+    // Send the response to the client
+    boost::beast::http::write(socket, response);
+}
+
+void handleRequest(http::request<http::string_body>& request, tcp::socket& socket) {
+    // Check HTTP method
+    if (request.method() == http::verb::post) {
+        handlePostRequest(request, socket);
+    } else if (request.method() == http::verb::get) {
+        handleGetRequest(request, socket);
+    } else {
+        // Unsupported HTTP method
+        http::response<http::string_body> response;
+        response.version(request.version());
+        response.result(http::status::bad_request);
+        response.set(http::field::server, "My HTTP Server");
+        response.set(http::field::content_type, "text/plain");
+        response.body() = "Unsupported HTTP method";
+        response.prepare_payload();
+
+        // Send the response to the client
+        boost::beast::http::write(socket, response);
+    }
+}
+
+void* runServer(void* arg) {
     boost::asio::io_context io_context;
     tcp::acceptor acceptor(io_context, {tcp::v4(), 8080});
 
@@ -51,6 +100,7 @@ void runServer() {
         // Close the socket
         socket.shutdown(tcp::socket::shutdown_send);
     }
+    pthread_exit(NULL);
 }
 
 // Função para enviar dados via TCP
@@ -152,12 +202,13 @@ void* receiveUDP(void* arg) {
 }
 
 int main() {
-    pthread_t sendThread, receiveThread;
+    pthread_t sendThread, receiveThread, httpThread;;
 
-    try {
-        runServer();
-    } catch (const std::exception& e) {
-        std::cerr << "Exception: " << e.what() << std::endl;
+
+    // Criando thread para o servidor HTTP
+    if (pthread_create(&httpThread, NULL, runServer, NULL) != 0) {
+        std::cerr << "Error creating HTTP server thread" << std::endl;
+        return 1;
     }
 
     // Criando threads para envio e recebimento

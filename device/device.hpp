@@ -17,7 +17,7 @@ private:
 public:
     LightBulb(int id, bool on, int intensity, Color color);
 
-    void setId(bool newId);
+    void setId(int newId);
     int getId();
     void setOn(bool state);
     bool getOn() const;
