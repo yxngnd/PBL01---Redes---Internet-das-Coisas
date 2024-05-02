@@ -15,6 +15,32 @@
 
 using json = nlohmann::json;
 
+void deviceUpdate(LightBulb *device, json data){
+
+    int command = data["command"].get<int>();
+    int value = data["value"].get<int>();
+
+    switch(command){
+        case 1: {
+            device->setOn(value);
+            break;
+        }
+        case 2: {
+            device->setIntensity(value);
+            break;
+        }
+        case 3: {
+            Color newColor = static_cast<Color>(value);
+            device->setColor(newColor);
+            break;
+        }
+        default:
+            break;
+    }
+
+}
+
+
 // Função para enviar dados via UDP
 void* sendUDP(void* device_ptr) {
     int sockfd;
@@ -58,11 +84,13 @@ void* sendUDP(void* device_ptr) {
 }
 
 // Função para receber dados via TCP
-void* receiveTCP(void* arg) {
+void* receiveTCP(void* device_ptr) {
     int sockfd, newsockfd;
     struct sockaddr_in serverAddr, clientAddr;
     socklen_t clientLen;
     char buffer[MAX_BUFFER_SIZE];
+
+    LightBulb *device = static_cast<LightBulb*>(device_ptr);
 
     // Criação do socket
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -108,10 +136,13 @@ void* receiveTCP(void* arg) {
             // Convertendo a string recebida para um objeto JSON
             json receivedData = json::parse(buffer);
 
+            if(!(receivedData.empty())){
+                deviceUpdate(device, receivedData);
+            }
             // Imprimindo o JSON recebido
             std::cout << "JSON recebido: " << receivedData << std::endl;
         } else if (recvlen == 0) {
-            std::cerr << "Conexão fechada pelo cliente" << std::endl;
+            std::cerr << "Conexão fechada pelo servidor" << std::endl;
             break;
         } else {
             perror("Erro ao receber dados via TCP");

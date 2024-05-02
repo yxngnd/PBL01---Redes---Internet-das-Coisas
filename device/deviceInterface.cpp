@@ -75,7 +75,7 @@ int main(){
         return 1;
     }
 
-    if (pthread_create(&receiveThread, NULL, receiveTCP, NULL) != 0) {
+    if (pthread_create(&receiveThread, NULL, receiveTCP, &device) != 0) {
         std::cerr << "Erro ao criar thread de recebimento" << std::endl;
         return 1;
     }
