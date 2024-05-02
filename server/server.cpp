@@ -9,7 +9,6 @@
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
 
-
 #define TCP_PORT 54321
 #define UDP_PORT 12345
 #define MAX_BUFFER_SIZE 1024
@@ -18,46 +17,114 @@ using json = nlohmann::json;
 using tcp = boost::asio::ip::tcp;
 namespace http = boost::beast::http;
 
+json deviceData;
+json commandData;
+
+json getData(const json& source){
+    json data = source;
+    return data;
+}
+
+void storeData(const json& data, json& local){
+    local = data;
+}
+
 void handlePostRequest(http::request<http::string_body>& request, tcp::socket& socket) {
-    // Parse JSON from request body
-    json receivedData = json::parse(request.body());
+    try {
+        // Verificar se o corpo da requisição está presente
+        if (request.body().empty()) {
+            throw std::invalid_argument("Empty request body");
+        }
 
-    // Perform some action with received data
-    // Here you can edit data or perform any other action based on the received data
+        // Parse JSON from request body
+        json receivedData = json::parse(request.body());
 
-    // Prepare the response message
-    http::response<http::string_body> response;
-    response.version(request.version());
-    response.result(http::status::ok);
-    response.set(http::field::server, "My HTTP Server");
-    response.set(http::field::content_type, "text/plain");
-    response.body() = "Data successfully updated!";
-    response.prepare_payload();
+        // Perform some action with received data
+        // Here you can edit data or perform any other action based on the received data
+        storeData(receivedData, commandData);
 
-    // Send the response to the client
-    boost::beast::http::write(socket, response);
+        // Prepare the JSON response
+        json jsonResponse;
+        jsonResponse["status"] = "success";
+        jsonResponse["message"] = "Data successfully updated";
+
+        // Prepare the response message
+        http::response<http::string_body> response;
+        response.version(request.version());
+        response.result(http::status::ok);
+        response.set(http::field::server, "My HTTP Server");
+        response.set(http::field::content_type, "application/json");
+        response.body() = jsonResponse.dump();
+        response.prepare_payload();
+
+        // Send the response to the client
+        boost::beast::http::write(socket, response);
+    } catch (const std::exception& e) {
+        std::cerr << "Error handling POST request: " << e.what() << std::endl;
+
+        // Prepare an error JSON response
+        json errorResponse;
+        errorResponse["status"] = "error";
+        errorResponse["message"] = "Error handling POST request";
+
+        // Prepare the response message
+        http::response<http::string_body> response;
+        response.version(request.version());
+        response.result(http::status::bad_request);
+        response.set(http::field::server, "My HTTP Server");
+        response.set(http::field::content_type, "application/json");
+        response.body() = errorResponse.dump();
+        response.prepare_payload();
+
+        // Send the error response to the client
+        boost::beast::http::write(socket, response);
+    }
 }
 
 void handleGetRequest(http::request<http::string_body>& request, tcp::socket& socket) {
-    // Prepare some data to send
-    json data;
-    data["nome"] = "Maria";
-    data["idade"] = 25;
+    try {
+        // Prepare some data to send
+        json data = getData(deviceData);
 
-    // Convert data to JSON string
-    std::string jsonData = data.dump();
+        // Check if data is empty
+        if (data.empty()) {
+            throw std::runtime_error("No data available");
+        }
 
-    // Prepare the response message
-    http::response<http::string_body> response;
-    response.version(request.version());
-    response.result(http::status::ok);
-    response.set(http::field::server, "My HTTP Server");
-    response.set(http::field::content_type, "application/json");
-    response.body() = jsonData;
-    response.prepare_payload();
+        // Convert data to JSON string
+        std::string jsonData = data.dump();
 
-    // Send the response to the client
-    boost::beast::http::write(socket, response);
+        // Prepare the response message
+        http::response<http::string_body> response;
+        response.version(request.version());
+        response.result(http::status::ok);
+        response.set(http::field::server, "My HTTP Server");
+        response.set(http::field::content_type, "application/json");
+        response.body() = jsonData;
+        response.prepare_payload();
+
+        // Send the response to the client
+        boost::beast::http::write(socket, response);
+    } catch (const std::exception& e) {
+        std::cerr << "Error handling GET request: " << e.what() << std::endl;
+
+        // Prepare an error JSON response
+        json errorResponse;
+        errorResponse["status"] = "error";
+        errorResponse["message"] = "Error handling POST request";
+
+        // Prepare an error response
+        http::response<http::string_body> response;
+        response.version(request.version());
+        response.result(http::status::internal_server_error);
+        response.set(http::field::server, "My HTTP Server");
+        response.set(http::field::content_type, "text/plain");
+        response.body() = errorResponse.dump();
+        response.prepare_payload();
+
+        // Send the error response to the client
+        boost::beast::http::write(socket, response);
+    }
 }
 
 void handleRequest(http::request<http::string_body>& request, tcp::socket& socket) {
@@ -129,12 +196,10 @@ void* sendTCP(void* arg) {
 
     while (true) {
         // Criando e populando um objeto JSON
-        json data;
-        data["nome"] = "João";
-        data["idade"] = 30;
+        json sendData = getData(commandData);
 
         // Convertendo o objeto JSON para uma string
-        std::string jsonStr = data.dump();
+        std::string jsonStr = sendData.dump();
 
         // Enviando dados via TCP
         if (send(sockfd, jsonStr.c_str(), jsonStr.length(), 0) < 0) {
@@ -185,9 +250,10 @@ void* receiveUDP(void* arg) {
 
             // Convertendo a string recebida para um objeto JSON
             json receivedData = json::parse(buffer);
+            storeData(receivedData, deviceData);
 
             // Imprimindo o JSON recebido
-            std::cout << "JSON recebido via UDP: " << receivedData << std::endl;
+            std::cout << "Device: " << getData(deviceData) << std::endl;
         } else if (recvlen == 0) {
             std::cerr << "Conexão fechada pelo cliente" << std::endl;
             break;
@@ -203,7 +269,6 @@ void* receiveUDP(void* arg) {
 
 int main() {
     pthread_t sendThread, receiveThread, httpThread;;
-
 
     // Criando thread para o servidor HTTP
     if (pthread_create(&httpThread, NULL, runServer, NULL) != 0) {
