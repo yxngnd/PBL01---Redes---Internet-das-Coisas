@@ -20,13 +20,13 @@ Execute o seguinte comando para obter a imagem do server:
 ```bash
 docker pull yxngnd/device:latest
 ```
-Execute a imagem e substitua o campo *broker_ip* pelo ip do server:
+Execute a imagem e substitua o campo *server_ip* pelo ip do server:
 ```bash
 docker run -it -e server_ip={server_ip} yxngnd/device
 ```
 
 ### Aplicação
-Execute o comando para compilar a aplicação:
+Entre na pasta *client* e execute o comando para compilar a aplicação:
 ```bash
 g++ -o app clientApi.cpp
 ```
