@@ -12,7 +12,7 @@ docker pull yxngnd/server:latest
 ```
 Execute a imagem:
 ```bash
-docker run -it -p 8080:8080 yxngnd/broker
+docker run -it -p 8080:8080 yxngnd/server
 ```
 
 ### Dispositivo
