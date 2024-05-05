@@ -1,6 +1,6 @@
 #include "device.hpp"
 
-LightBulb::LightBulb(int id, bool on, int intensity, Color color) : on(on), intensity(intensity), color(color){
+LightBulb::LightBulb(int id, bool on, int intensity, Color color) : id(id), on(on), intensity(intensity), color(color){
     id = id;
     on = on;
     intensity = intensity;

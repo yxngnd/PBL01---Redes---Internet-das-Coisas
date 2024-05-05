@@ -57,9 +57,9 @@ void* menu(void* device_ptr){
     pthread_exit(NULL);
 }
 
-int main(){
+int main(int argc, char *argv[]){
 
-    LightBulb device(14700, false, 0, Color::WHITE);
+    LightBulb device(std::atoi(argv[1]), false, 0, Color::WHITE);
 
     pthread_t sendThread, receiveThread, menuThread;
 

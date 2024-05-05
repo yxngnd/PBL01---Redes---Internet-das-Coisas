@@ -1,5 +1,6 @@
 #include <iostream>
 #include <sys/socket.h>
+#include <queue>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
@@ -13,10 +14,15 @@
 #define UDP_PORT 12345
 #define MAX_BUFFER_SIZE 1024
 
+void sendTCP(int conn);
+
 using json = nlohmann::json;
 using tcp = boost::asio::ip::tcp;
 namespace http = boost::beast::http;
 
+std::queue<json> commands;
+std::vector<int> connections;
+std::vector<json> devices;
 json deviceData;
 json commandData;
 
@@ -42,6 +48,7 @@ void handlePostRequest(http::request<http::string_body>& request, tcp::socket& s
         // Perform some action with received data
         // Here you can edit data or perform any other action based on the received data
         storeData(receivedData, commandData);
+        sendTCP(connections[0]);
 
         // Prepare the JSON response
         json jsonResponse;
@@ -170,31 +177,45 @@ void* runServer(void* arg) {
     pthread_exit(NULL);
 }
 
-// Função para enviar dados via TCP
-void* sendTCP(void* arg) {
-    int sockfd;
-    struct sockaddr_in serverAddr;
-
-    // Criação do socket
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        perror("Erro ao abrir socket TCP para envio");
-        pthread_exit(NULL);
+bool connectionExists(int sockfd) {
+    for (int conn : connections) {
+        if (conn == sockfd) {
+            return true;
+        }
     }
+    return false;
+}
 
-    // Configuração do endereço do servidor TCP
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(TCP_PORT);
-    serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-    // Conexão ao servidor TCP
-    if (connect(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-        perror("Erro ao conectar ao servidor TCP");
-        close(sockfd);
-        pthread_exit(NULL);
-    }
-
+void* establishConnections(void* arg) {
     while (true) {
+        int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd < 0) {
+            perror("Erro ao abrir socket TCP para envio");
+            continue;
+        }
+
+        struct sockaddr_in serverAddr;
+        serverAddr.sin_family = AF_INET;
+        serverAddr.sin_port = htons(TCP_PORT);
+        serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+        // Loop para tentar conectar até que a conexão seja estabelecida
+        while (connect(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+            perror("Erro ao conectar ao servidor TCP");
+            sleep(3); // Espera 3 segundos antes de tentar novamente
+        }
+        // Adiciona o novo socket à lista de sockets
+        if(!connectionExists(sockfd)){
+            connections.push_back(sockfd);
+        }
+    }
+
+    pthread_exit(NULL);
+}
+
+void sendTCP(int conn) {
+    // Implemente a lógica para obter os dados a serem enviados
+    if(!(commandData.empty())){
         // Criando e populando um objeto JSON
         json sendData = getData(commandData);
 
@@ -202,17 +223,9 @@ void* sendTCP(void* arg) {
         std::string jsonStr = sendData.dump();
 
         // Enviando dados via TCP
-        if (send(sockfd, jsonStr.c_str(), jsonStr.length(), 0) < 0) {
-            perror("Erro ao enviar dados via TCP");
-            break; // Encerra o loop se houver erro no envio
-        }
-
-        sleep(2); // Espera 2 segundos antes de enviar o próximo JSON
+        send(conn, jsonStr.c_str(), jsonStr.length(), 0);
+        commandData = json();
     }
-
-    // Fechar socket e finalizar thread
-    close(sockfd);
-    pthread_exit(NULL);
 }
 
 // Função para receber dados via UDP
@@ -253,7 +266,7 @@ void* receiveUDP(void* arg) {
             storeData(receivedData, deviceData);
 
             // Imprimindo o JSON recebido
-            std::cout << "Device: " << getData(deviceData) << std::endl;
+            std::cout << "Device: " << receivedData << std::endl;
         } else if (recvlen == 0) {
             std::cerr << "Conexão fechada pelo cliente" << std::endl;
             break;
@@ -268,27 +281,20 @@ void* receiveUDP(void* arg) {
 }
 
 int main() {
-    pthread_t sendThread, receiveThread, httpThread;;
+    pthread_t receiveThread, httpThread, connectionsThread;
+
+    // Criar thread para estabelecer conexões
+    pthread_create(&connectionsThread, NULL, establishConnections, NULL);
 
     // Criando thread para o servidor HTTP
-    if (pthread_create(&httpThread, NULL, runServer, NULL) != 0) {
-        std::cerr << "Error creating HTTP server thread" << std::endl;
-        return 1;
-    }
-
+    pthread_create(&httpThread, NULL, runServer, NULL);
+    
     // Criando threads para envio e recebimento
-    if (pthread_create(&sendThread, NULL, sendTCP, NULL) != 0) {
-        std::cerr << "Erro ao criar thread de envio via TCP" << std::endl;
-        return 1;
-    }
-    if (pthread_create(&receiveThread, NULL, receiveUDP, NULL) != 0) {
-        std::cerr << "Erro ao criar thread de recebimento via UDP" << std::endl;
-        return 1;
-    }
+    pthread_create(&receiveThread, NULL, receiveUDP, NULL);
 
     // Esperar pelo término das threads
-    pthread_join(sendThread, NULL);
     pthread_join(receiveThread, NULL);
-
+    pthread_join(httpThread, NULL);
+    pthread_join(connectionsThread, NULL);
     return 0;
 }
