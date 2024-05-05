@@ -64,21 +64,11 @@ int main(int argc, char *argv[]){
     pthread_t sendThread, receiveThread, menuThread;
 
     // Criando threads de menu
-    if (pthread_create(&menuThread, NULL, menu, &device) != 0) {
-        std::cerr << "Erro ao criar thread de recebimento" << std::endl;
-        return 1;
-    }
+    pthread_create(&menuThread, NULL, menu, &device);
  
     // Criando threads para envio e recebimento
-    if (pthread_create(&sendThread, NULL, sendUDP, &device) != 0) {
-        std::cerr << "Erro ao criar thread de envio" << std::endl;
-        return 1;
-    }
-
-    if (pthread_create(&receiveThread, NULL, receiveTCP, &device) != 0) {
-        std::cerr << "Erro ao criar thread de recebimento" << std::endl;
-        return 1;
-    }
+    pthread_create(&sendThread, NULL, sendUDP, &device);
+    pthread_create(&receiveThread, NULL, receiveTCP, &device);
 
     // Esperar pelo término das threads
     pthread_join(sendThread, NULL);

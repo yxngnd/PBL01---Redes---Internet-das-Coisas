@@ -42,6 +42,7 @@ void deviceUpdate(LightBulb *device, json data){
         default:
             break;
     }
+
 }
 
 // Função para enviar dados via UDP
@@ -141,8 +142,10 @@ void* receiveTCP(void* device_ptr) {
             int recvlen = recv(newsockfd, buffer, MAX_BUFFER_SIZE, 0);
             if (recvlen > 0) {
                 buffer[recvlen] = '\0';
+
                 // Convertendo a string recebida para um objeto JSON
                 json receivedData = json::parse(buffer);
+
                 if(!(receivedData.empty())){
                     deviceUpdate(device, receivedData);
                 }

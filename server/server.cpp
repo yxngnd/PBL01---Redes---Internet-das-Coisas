@@ -18,7 +18,15 @@ void sendTCP(int conn);
 
 using json = nlohmann::json;
 using tcp = boost::asio::ip::tcp;
+using address = boost::asio::ip::address;
 namespace http = boost::beast::http;
+
+struct Connection {
+    int id;
+    address ip;
+    unsigned short port;
+    int sockfd;
+};
 
 std::queue<json> commands;
 std::vector<int> connections;
@@ -197,7 +205,7 @@ void* establishConnections(void* arg) {
         struct sockaddr_in serverAddr;
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_port = htons(TCP_PORT);
-        serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        serverAddr.sin_addr.s_addr = inet_addr("0.0.0.0");
 
         // Loop para tentar conectar até que a conexão seja estabelecida
         while (connect(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
