@@ -18,20 +18,16 @@ void sendTCP(int conn);
 
 using json = nlohmann::json;
 using tcp = boost::asio::ip::tcp;
-using address = boost::asio::ip::address;
 namespace http = boost::beast::http;
 
 struct Connection {
     int id;
-    address ip;
-    unsigned short port;
     int sockfd;
 };
 
 std::queue<json> commands;
 std::vector<int> connections;
 std::vector<json> devices;
-json deviceData;
 json commandData;
 
 json getData(const json& source){
@@ -99,7 +95,8 @@ void handlePostRequest(http::request<http::string_body>& request, tcp::socket& s
 void handleGetRequest(http::request<http::string_body>& request, tcp::socket& socket) {
     try {
         // Prepare some data to send
-        json data = getData(deviceData);
+        json data;
+        data["devices"] = devices;
 
         // Check if data is empty
         if (data.empty()) {
@@ -108,6 +105,7 @@ void handleGetRequest(http::request<http::string_body>& request, tcp::socket& so
 
         // Convert data to JSON string
         std::string jsonData = data.dump();
+        std::cout << "dddd: " << jsonData << std::endl;
 
         // Prepare the response message
         http::response<http::string_body> response;
@@ -271,7 +269,22 @@ void* receiveUDP(void* arg) {
 
             // Convertendo a string recebida para um objeto JSON
             json receivedData = json::parse(buffer);
-            storeData(receivedData, deviceData);
+            bool idFind = false;
+            if(devices.empty()){
+                devices.push_back(receivedData);
+            }
+            for (auto& device : devices) {
+                if (device["id"] == receivedData["id"]) {
+                    device = receivedData; // Substituir o JSON existente pelo novo JSON
+                    idFind = true;
+                    break;
+                }
+            }
+
+            // Se o ID não foi encontrado, adicionar o novo JSON
+            if (!idFind) {
+                devices.push_back(receivedData);
+            }
 
             // Imprimindo o JSON recebido
             std::cout << "Device: " << receivedData << std::endl;
