@@ -8,7 +8,6 @@
 #include <nlohmann/json.hpp>
 #include "device.hpp"
 
-#define SERVER_IP "127.0.0.1"
 #define TCP_PORT 54321
 #define UDP_PORT 12345
 #define MAX_BUFFER_SIZE 1024
@@ -90,56 +89,32 @@ void* sendUDP(void* device_ptr) {
 
 // Função para receber dados via TCP
 void* receiveTCP(void* device_ptr) {
-    int sockfd, newsockfd;
-    struct sockaddr_in serverAddr, clientAddr;
-    socklen_t clientLen;
+    std::cout << "aaaa" << std::endl;
     char buffer[MAX_BUFFER_SIZE];
+    int newsockfd;
 
     LightBulb *device = static_cast<LightBulb*>(device_ptr);
 
     while (true) {
-        // Criação do socket
-        sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        int sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd < 0) {
-            perror("Erro ao abrir socket TCP para recebimento");
-            sleep(3); // Tentar novamente após 3 segundos
+            perror("Erro ao abrir socket TCP para envio");
             continue;
         }
 
-        // Configuração do endereço do servidor TCP
+        struct sockaddr_in serverAddr;
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_port = htons(TCP_PORT);
-        serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+        serverAddr.sin_addr.s_addr = inet_addr("0.0.0.0");
 
-        // Associação do socket ao endereço do servidor TCP
-        if (bind(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-            perror("Erro ao associar socket ao endereço TCP");
-            close(sockfd);
-            sleep(3); // Tentar novamente após 3 segundos
-            continue;
+        // Loop para tentar conectar até que a conexão seja estabelecida
+        while (connect(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+            perror("Erro ao conectar ao servidor TCP");
+            sleep(3); // Espera 3 segundos antes de tentar novamente
         }
 
-        // Escutar conexões
-        if (listen(sockfd, 5) < 0) {
-            perror("Erro ao escutar por conexões TCP");
-            close(sockfd);
-            sleep(3); // Tentar novamente após 3 segundos
-            continue;
-        }
-
-        // Aceitar conexões
-        clientLen = sizeof(clientAddr);
-        newsockfd = accept(sockfd, (struct sockaddr*)&clientAddr, &clientLen);
-        if (newsockfd < 0) {
-            perror("Erro ao aceitar conexão TCP");
-            close(sockfd);
-            sleep(3); // Tentar novamente após 3 segundos
-            continue;
-        }
-
-        // Recebimento de dados
         while (true) {
-            int recvlen = recv(newsockfd, buffer, MAX_BUFFER_SIZE, 0);
+            int recvlen = recv(sockfd, buffer, MAX_BUFFER_SIZE, 0);
             if (recvlen > 0) {
                 buffer[recvlen] = '\0';
 
@@ -151,19 +126,15 @@ void* receiveTCP(void* device_ptr) {
                 }
                 // Imprimindo o JSON recebido
                 std::cout << "JSON recebido: " << receivedData << std::endl;
-            } else if (recvlen == 0) {
-                std::cerr << "Conexão fechada pelo servidor" << std::endl;
+            } 
+            else if (recvlen == 0) {
                 break;
-            } else {
+            } 
+            else {
                 perror("Erro ao receber dados via TCP");
             }
         }
-
-        // Fechar sockets e aguardar 3 segundos antes de tentar reconectar
-        close(newsockfd);
-        close(sockfd);
-        sleep(3); // Tentar novamente após 3 segundos
     }
-
+    
     pthread_exit(NULL);
 }

@@ -196,42 +196,77 @@ bool connectionExists(int sockfd) {
     return false;
 }
 
+void* handleConnection(void* arg) {
+    int newsockfd = *((int*)arg);
+    // lógica para lidar com a nova conexão
+    if (!connectionExists(newsockfd)) {
+        Connection newConn(idDevice, newsockfd);
+        conns.push_back(newConn);
+        commandData["command"] = 0;
+        commandData["value"] = idDevice;
+        sendTCP(newConn.id);
+        commandData = json();
+        idDevice++;
+    }
+    close(newsockfd); // fechar o novo socket após o tratamento da conexão
+    delete (int*)arg; // liberar memória alocada para o argumento
+    return NULL;
+}
+
 void* establishConnections(void* arg) {
-    while (true) {
-        int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-        if (sockfd < 0) {
-            perror("Erro ao abrir socket TCP para envio");
-            continue;
-        }
+    int sockfd;
+    struct sockaddr_in serverAddr;
 
-        struct sockaddr_in serverAddr;
-        serverAddr.sin_family = AF_INET;
-        serverAddr.sin_port = htons(TCP_PORT);
-        serverAddr.sin_addr.s_addr = inet_addr("0.0.0.0");
-
-        // Loop para tentar conectar até que a conexão seja estabelecida
-        while (connect(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-            perror("Erro ao conectar ao servidor TCP");
-            sleep(3); // Espera 3 segundos antes de tentar novamente
-        }
-        // Adiciona o novo socket à lista de sockets
-        if(!connectionExists(sockfd)){
-            Connection newConn(idDevice, sockfd);
-            conns.push_back(newConn);
-            commandData["command"] = 0;
-            commandData["value"] = idDevice;
-            sendTCP(newConn.id);
-            commandData = json();
-            idDevice = idDevice + 1;
-            break;
-        }
+    // Criação do socket
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("Erro ao abrir socket TCP para recebimento");
+        exit(EXIT_FAILURE);
     }
 
+    // Configuração do endereço do servidor TCP
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(TCP_PORT);
+    serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    // Associação do socket ao endereço do servidor TCP
+    if (bind(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        perror("Erro ao associar socket ao endereço TCP");
+        exit(EXIT_FAILURE);
+    }
+
+    // Escutar conexões
+    if (listen(sockfd, 5) < 0) {
+        perror("Erro ao escutar por conexões TCP");
+        exit(EXIT_FAILURE);
+    }
+
+    while (true) {
+        // Aceitar conexões
+        struct sockaddr_in clientAddr;
+        socklen_t clientLen = sizeof(clientAddr);
+        int* newsockfd = (int*)malloc(sizeof(int)); // aloca memória para o novo socket
+        *newsockfd = accept(sockfd, (struct sockaddr*)&clientAddr, &clientLen);
+        if (*newsockfd < 0) {
+            perror("Erro ao aceitar conexão TCP");
+            close(sockfd);
+            exit(EXIT_FAILURE);
+        }
+
+        // Cria um segmento para lidar com a nova conexão
+        pthread_t handleThread;
+        pthread_create(&handleThread, NULL, handleConnection, (void*)newsockfd);
+        pthread_detach(handleThread); // permite que o segmento seja liberado automaticamente após a conclusão
+    }
+
+    // Nunca será alcançado
+    close(sockfd);
     pthread_exit(NULL);
 }
 
 void sendTCP(int id) {
     // Implemente a lógica para obter os dados a serem enviados
+    std::cout << "a : " << conns.back().sockfd << conns.back().id << std::endl;
     int sendConn;
     for (Connection conn : conns) {
         if (id == conn.id) {
