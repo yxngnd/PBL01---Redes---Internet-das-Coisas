@@ -49,9 +49,9 @@ void doPost(const std::string& host, const std::string& port) {
 
         // Criar objeto JSON
         json requestData;
-        requestData["id"] = 1;
+        requestData["id"] = 0;
         requestData["command"] = 1;
-        requestData["value"] = 0;
+        requestData["value"] = 1;
 
         // Serializar o objeto JSON em uma string
         std::string requestBody = requestData.dump();

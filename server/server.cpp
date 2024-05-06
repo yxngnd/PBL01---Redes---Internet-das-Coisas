@@ -1,6 +1,5 @@
 #include <iostream>
 #include <sys/socket.h>
-#include <queue>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
@@ -19,7 +18,8 @@ void sendTCP(int conn);
 using json = nlohmann::json;
 using tcp = boost::asio::ip::tcp;
 namespace http = boost::beast::http;
-int idDevice = 1;
+
+int idDevice = 0;
 
 struct Connection {
     int id;
@@ -27,20 +27,13 @@ struct Connection {
     Connection(int _id, int _sockfd) : id(_id), sockfd(_sockfd) {}
 };
 
-std::queue<json> commands;
-std::vector<int> connections;
+int sockTCP = socket(AF_INET, SOCK_STREAM, 0);
+int sockUDP = socket(AF_INET, SOCK_DGRAM, 0);
+
 std::vector<Connection> conns;
 std::vector<json> devices;
 json commandData;
-
-json getData(const json& source){
-    json data = source;
-    return data;
-}
-
-void storeData(const json& data, json& local){
-    local = data;
-}
+int idCommand = 1;
 
 void handlePostRequest(http::request<http::string_body>& request, tcp::socket& socket) {
     try {
@@ -54,9 +47,7 @@ void handlePostRequest(http::request<http::string_body>& request, tcp::socket& s
 
         // Perform some action with received data
         // Here you can edit data or perform any other action based on the received data
-        storeData(receivedData, commandData);
-        std::cout << "commandData: " << commandData << std::endl;
-        //std::cout << "id: " << receivedData["id"] << std::endl;
+        commandData = receivedData;
         sendTCP(receivedData["id"]);
 
         // Prepare the JSON response
@@ -196,88 +187,66 @@ bool connectionExists(int sockfd) {
     return false;
 }
 
-void* handleConnection(void* arg) {
-    int newsockfd = *((int*)arg);
-    // lógica para lidar com a nova conexão
-    if (!connectionExists(newsockfd)) {
-        Connection newConn(idDevice, newsockfd);
-        conns.push_back(newConn);
-        commandData["command"] = 0;
-        commandData["value"] = idDevice;
-        sendTCP(newConn.id);
-        commandData = json();
-        idDevice++;
-    }
-    close(newsockfd); // fechar o novo socket após o tratamento da conexão
-    delete (int*)arg; // liberar memória alocada para o argumento
-    return NULL;
-}
-
+// Função para aceitar conexões de clientes
 void* establishConnections(void* arg) {
-    int sockfd;
-    struct sockaddr_in serverAddr;
+    int newsockTCP;
+    struct sockaddr_in serverAddr, clientAddr;
+    socklen_t clientLen;
 
-    // Criação do socket
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        perror("Erro ao abrir socket TCP para recebimento");
-        exit(EXIT_FAILURE);
-    }
-
-    // Configuração do endereço do servidor TCP
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(TCP_PORT);
-    serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    // Associação do socket ao endereço do servidor TCP
-    if (bind(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-        perror("Erro ao associar socket ao endereço TCP");
-        exit(EXIT_FAILURE);
-    }
-
-    // Escutar conexões
-    if (listen(sockfd, 5) < 0) {
-        perror("Erro ao escutar por conexões TCP");
-        exit(EXIT_FAILURE);
-    }
 
     while (true) {
-        // Aceitar conexões
-        struct sockaddr_in clientAddr;
-        socklen_t clientLen = sizeof(clientAddr);
-        int* newsockfd = (int*)malloc(sizeof(int)); // aloca memória para o novo socket
-        *newsockfd = accept(sockfd, (struct sockaddr*)&clientAddr, &clientLen);
-        if (*newsockfd < 0) {
-            perror("Erro ao aceitar conexão TCP");
-            close(sockfd);
-            exit(EXIT_FAILURE);
+        // Criação do socket
+        if (sockTCP < 0) {
+            perror("Erro ao abrir socket TCP para recebimento");
+            sleep(3); // Tentar novamente após 3 segundos
+            continue;
         }
-
-        // Cria um segmento para lidar com a nova conexão
-        pthread_t handleThread;
-        pthread_create(&handleThread, NULL, handleConnection, (void*)newsockfd);
-        pthread_detach(handleThread); // permite que o segmento seja liberado automaticamente após a conclusão
+        // Configuração do endereço do servidor TCP
+        serverAddr.sin_family = AF_INET;
+        serverAddr.sin_port = htons(TCP_PORT);
+        serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+        // Associação do socket ao endereço do servidor TCP
+        bind(sockTCP, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
+        // Escutar conexões
+        if (listen(sockTCP, 5) < 0) {
+            perror("Erro ao escutar por conexões TCP");
+            close(sockTCP);
+            sleep(3); // Tentar novamente após 3 segundos
+            continue;
+        }
+        // Aceitar conexões
+        clientLen = sizeof(clientAddr);
+        
+        newsockTCP = accept(sockTCP, (struct sockaddr*)&clientAddr, &clientLen);
+        
+        // Recebimento de dados
+        if (!connectionExists(newsockTCP)) {
+            Connection newConn(idDevice, newsockTCP);
+            conns.push_back(newConn);
+            commandData["command"] = 0;
+            commandData["value"] = idDevice;
+            sendTCP(newConn.id);
+            commandData = json();
+            idDevice++;
+            // Fechar sockets e aguardar 3 segundos antes de tentar reconectar
+            //sleep(3); // Tentar novamente após 3 segundos
+                
+        }
     }
-
-    // Nunca será alcançado
-    close(sockfd);
     pthread_exit(NULL);
 }
 
 void sendTCP(int id) {
-    // Implemente a lógica para obter os dados a serem enviados
-    std::cout << "a : " << conns.back().sockfd << conns.back().id << std::endl;
     int sendConn;
     for (Connection conn : conns) {
         if (id == conn.id) {
             sendConn = conn.sockfd;
-            //std::cout << "sendConn2: " << conn.sockfd << std::endl;
             break;
         }
     }
     if(!(commandData.empty())){
         // Criando e populando um objeto JSON
-        json sendData = getData(commandData);
+        json sendData = commandData;
 
         // Convertendo o objeto JSON para uma string
         std::string jsonStr = sendData.dump();
@@ -290,14 +259,12 @@ void sendTCP(int id) {
 
 // Função para receber dados via UDP
 void* receiveUDP(void* arg) {
-    int sockfd;
     struct sockaddr_in serverAddr, clientAddr;
     socklen_t clientLen;
     char buffer[MAX_BUFFER_SIZE];
 
     // Criação do socket
-    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd < 0) {
+    if (sockUDP < 0) {
         perror("Erro ao abrir socket UDP para recebimento");
         pthread_exit(NULL);
     }
@@ -308,36 +275,39 @@ void* receiveUDP(void* arg) {
     serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     // Associação do socket ao endereço do servidor UDP
-    if (bind(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+    if (bind(sockUDP, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
         perror("Erro ao associar socket ao endereço UDP");
-        close(sockfd);
+        close(sockUDP);
         pthread_exit(NULL);
     }
 
     // Recebimento de dados
     while (true) {
         clientLen = sizeof(clientAddr);
-        int recvlen = recvfrom(sockfd, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr*)&clientAddr, &clientLen);
+        int recvlen = recvfrom(sockUDP, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr*)&clientAddr, &clientLen);
         if (recvlen > 0) {
             buffer[recvlen] = '\0';
 
             // Convertendo a string recebida para um objeto JSON
             json receivedData = json::parse(buffer);
-            bool idFind = false;
-            if(devices.empty()){
-                devices.push_back(receivedData);
-            }
-            for (auto& device : devices) {
-                if (device["id"] == receivedData["id"]) {
-                    device = receivedData; // Substituir o JSON existente pelo novo JSON
-                    idFind = true;
-                    break;
-                }
-            }
 
-            // Se o ID não foi encontrado, adicionar o novo JSON
-            if (!idFind) {
-                devices.push_back(receivedData);
+            if(receivedData["id"] > (- 1)){
+                bool idFind = false;
+                if(devices.empty()){
+                    devices.push_back(receivedData);
+                }
+                for (auto& device : devices) {
+                    if (device["id"] == receivedData["id"]) {
+                        device = receivedData; // Substituir o JSON existente pelo novo JSON
+                        idFind = true;
+                        break;
+                    }
+                }
+
+                // Se o ID não foi encontrado, adicionar o novo JSON
+                if (!idFind) {
+                    devices.push_back(receivedData);
+                }
             }
 
             // Imprimindo o JSON recebido
@@ -351,7 +321,7 @@ void* receiveUDP(void* arg) {
     }
 
     // Fechar socket e finalizar thread
-    close(sockfd);
+    close(sockUDP);
     pthread_exit(NULL);
 }
 

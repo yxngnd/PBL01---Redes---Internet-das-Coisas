@@ -89,29 +89,27 @@ void* sendUDP(void* device_ptr) {
 
 // Função para receber dados via TCP
 void* receiveTCP(void* device_ptr) {
-    std::cout << "aaaa" << std::endl;
     char buffer[MAX_BUFFER_SIZE];
-    int newsockfd;
 
     LightBulb *device = static_cast<LightBulb*>(device_ptr);
+    bool conected = false;
+
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+    struct sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(TCP_PORT);
+    serverAddr.sin_addr.s_addr = inet_addr("0.0.0.0");
 
     while (true) {
-        int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-        if (sockfd < 0) {
-            perror("Erro ao abrir socket TCP para envio");
-            continue;
-        }
-
-        struct sockaddr_in serverAddr;
-        serverAddr.sin_family = AF_INET;
-        serverAddr.sin_port = htons(TCP_PORT);
-        serverAddr.sin_addr.s_addr = inet_addr("0.0.0.0");
-
         // Loop para tentar conectar até que a conexão seja estabelecida
         while (connect(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
             perror("Erro ao conectar ao servidor TCP");
             sleep(3); // Espera 3 segundos antes de tentar novamente
         }
+
+        std::string jsonStr = "Recebido";
+        send(sockfd, jsonStr.c_str(), jsonStr.length(), 0);
 
         while (true) {
             int recvlen = recv(sockfd, buffer, MAX_BUFFER_SIZE, 0);
@@ -133,7 +131,9 @@ void* receiveTCP(void* device_ptr) {
             else {
                 perror("Erro ao receber dados via TCP");
             }
+        
         }
+        close(sockfd);
     }
     
     pthread_exit(NULL);
