@@ -19,14 +19,17 @@ void sendTCP(int conn);
 using json = nlohmann::json;
 using tcp = boost::asio::ip::tcp;
 namespace http = boost::beast::http;
+int idDevice = 1;
 
 struct Connection {
     int id;
     int sockfd;
+    Connection(int _id, int _sockfd) : id(_id), sockfd(_sockfd) {}
 };
 
 std::queue<json> commands;
 std::vector<int> connections;
+std::vector<Connection> conns;
 std::vector<json> devices;
 json commandData;
 
@@ -52,7 +55,9 @@ void handlePostRequest(http::request<http::string_body>& request, tcp::socket& s
         // Perform some action with received data
         // Here you can edit data or perform any other action based on the received data
         storeData(receivedData, commandData);
-        sendTCP(connections[0]);
+        std::cout << "commandData: " << commandData << std::endl;
+        //std::cout << "id: " << receivedData["id"] << std::endl;
+        sendTCP(receivedData["id"]);
 
         // Prepare the JSON response
         json jsonResponse;
@@ -105,7 +110,6 @@ void handleGetRequest(http::request<http::string_body>& request, tcp::socket& so
 
         // Convert data to JSON string
         std::string jsonData = data.dump();
-        std::cout << "dddd: " << jsonData << std::endl;
 
         // Prepare the response message
         http::response<http::string_body> response;
@@ -184,8 +188,8 @@ void* runServer(void* arg) {
 }
 
 bool connectionExists(int sockfd) {
-    for (int conn : connections) {
-        if (conn == sockfd) {
+    for (Connection conn : conns) {
+        if (sockfd == conn.sockfd) {
             return true;
         }
     }
@@ -212,15 +216,30 @@ void* establishConnections(void* arg) {
         }
         // Adiciona o novo socket à lista de sockets
         if(!connectionExists(sockfd)){
-            connections.push_back(sockfd);
+            Connection newConn(idDevice, sockfd);
+            conns.push_back(newConn);
+            commandData["command"] = 0;
+            commandData["value"] = idDevice;
+            sendTCP(newConn.id);
+            commandData = json();
+            idDevice = idDevice + 1;
+            break;
         }
     }
 
     pthread_exit(NULL);
 }
 
-void sendTCP(int conn) {
+void sendTCP(int id) {
     // Implemente a lógica para obter os dados a serem enviados
+    int sendConn;
+    for (Connection conn : conns) {
+        if (id == conn.id) {
+            sendConn = conn.sockfd;
+            //std::cout << "sendConn2: " << conn.sockfd << std::endl;
+            break;
+        }
+    }
     if(!(commandData.empty())){
         // Criando e populando um objeto JSON
         json sendData = getData(commandData);
@@ -229,7 +248,7 @@ void sendTCP(int conn) {
         std::string jsonStr = sendData.dump();
 
         // Enviando dados via TCP
-        send(conn, jsonStr.c_str(), jsonStr.length(), 0);
+        send(sendConn, jsonStr.c_str(), jsonStr.length(), 0);
         commandData = json();
     }
 }

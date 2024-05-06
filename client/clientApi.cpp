@@ -49,6 +49,7 @@ void doPost(const std::string& host, const std::string& port) {
 
         // Criar objeto JSON
         json requestData;
+        requestData["id"] = 1;
         requestData["command"] = 1;
         requestData["value"] = 0;
 
