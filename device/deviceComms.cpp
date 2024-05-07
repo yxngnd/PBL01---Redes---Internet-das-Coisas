@@ -8,9 +8,13 @@
 #include <nlohmann/json.hpp>
 #include "device.hpp"
 
+const char * host = getenv("HOST");
+
 #define TCP_PORT 54321
 #define UDP_PORT 12345
 #define MAX_BUFFER_SIZE 1024
+#define TCP_HOST host
+#define UDP_HOST host
 
 using json = nlohmann::json;
 
@@ -33,8 +37,7 @@ void deviceUpdate(LightBulb *device, json data){
             break;
         }
         case 3: {
-            Color newColor = static_cast<Color>(value);
-            device->setColor(newColor);
+            device->setColor(value);
             break;
         }
         
@@ -61,7 +64,7 @@ void* sendUDP(void* device_ptr) {
     // Configuração do endereço do servidor UDP
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(UDP_PORT);
-    serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    serverAddr.sin_addr.s_addr = inet_addr(UDP_HOST);
 
     while (true) {
         // Criando e populando um objeto JSON
@@ -99,7 +102,7 @@ void* receiveTCP(void* device_ptr) {
     struct sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(TCP_PORT);
-    serverAddr.sin_addr.s_addr = inet_addr("0.0.0.0");
+    serverAddr.sin_addr.s_addr = inet_addr(TCP_HOST);
 
     while (true) {
         // Loop para tentar conectar até que a conexão seja estabelecida

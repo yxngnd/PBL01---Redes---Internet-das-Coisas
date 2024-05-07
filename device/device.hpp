@@ -15,7 +15,7 @@ private:
     Color color;
 
 public:
-    LightBulb(int id, bool on, int intensity, Color color);
+    LightBulb(int id, bool on, int intensity, int selectColor);
 
     void setId(int newId);
     int getId();
@@ -23,7 +23,7 @@ public:
     bool getOn() const;
     void setIntensity(int newIntensity);
     int getIntensity() const;
-    void setColor(Color newColor);
+    void setColor(int selectColor);
     std::string getColor() const;
     void displayStatus() const;
 };

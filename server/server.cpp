@@ -13,7 +13,10 @@
 #define UDP_PORT 12345
 #define MAX_BUFFER_SIZE 1024
 
+
 void sendTCP(int conn);
+void getIP();
+char* BROKER_IP;
 
 using json = nlohmann::json;
 using tcp = boost::asio::ip::tcp;
@@ -34,6 +37,19 @@ std::vector<Connection> conns;
 std::vector<json> devices;
 json commandData;
 int idCommand = 1;
+
+void getIP(){
+    char hostname[256];
+    gethostname(hostname, sizeof(hostname));
+
+    struct hostent *host_entry;
+    host_entry = gethostbyname(hostname);
+
+    char* ip = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
+    BROKER_IP = ip;
+    std::cout << "Endereço IP da máquina: " << ip << std::endl;
+    std::cout << "Endereço IP da máquina: " << BROKER_IP << std::endl;
+}
 
 void handlePostRequest(http::request<http::string_body>& request, tcp::socket& socket) {
     try {
@@ -204,7 +220,8 @@ void* establishConnections(void* arg) {
         // Configuração do endereço do servidor TCP
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_port = htons(TCP_PORT);
-        serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+        serverAddr.sin_addr.s_addr = inet_addr(BROKER_IP);
+
         // Associação do socket ao endereço do servidor TCP
         bind(sockTCP, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
         // Escutar conexões
@@ -272,7 +289,7 @@ void* receiveUDP(void* arg) {
     // Configuração do endereço do servidor UDP
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(UDP_PORT);
-    serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddr.sin_addr.s_addr = inet_addr(BROKER_IP);
 
     // Associação do socket ao endereço do servidor UDP
     if (bind(sockUDP, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
@@ -326,6 +343,7 @@ void* receiveUDP(void* arg) {
 }
 
 int main() {
+    getIP();
     pthread_t receiveThread, httpThread, connectionsThread;
 
     // Criar thread para estabelecer conexões
