@@ -7,10 +7,10 @@
 // Função para exibir o menu
 void showMenu() {
     std::cout << "###Device Management###" << std::endl;
-        std::cout << "[1] - Alterar Status (ligado/desligado) " << std::endl;
-        std::cout << "[2] - Alterar Intensidade" << std::endl;
-        std::cout << "[3] - Alterar Cor" << std::endl;
-        std::cout << ">> " << std::endl;
+    std::cout << "[1] - Alterar Status (ligado/desligado) " << std::endl;
+    std::cout << "[2] - Alterar Intensidade" << std::endl;
+    std::cout << "[3] - Alterar Cor" << std::endl;
+    std::cout << ">> " << std::endl;
 }
 
 void* menu(void* device_ptr){
@@ -45,8 +45,7 @@ void* menu(void* device_ptr){
                 std::cout << "Digite a nova cor: [0] - Branco [1] - Vermelho [2] - Roxo [3] - Azul";
                 std::cout << ">> ";
                 std::cin >> selectColor;
-                Color newColor = static_cast<Color>(selectColor);
-                device->setColor(newColor);
+                device->setColor(selectColor);
                 break;
             }
             default:
@@ -59,7 +58,7 @@ void* menu(void* device_ptr){
 
 int main(){
 
-    LightBulb device((-1), false, 0, Color::WHITE);
+    LightBulb device((-1), false, 0, 0);
 
     pthread_t sendThread, receiveThread, menuThread;
 

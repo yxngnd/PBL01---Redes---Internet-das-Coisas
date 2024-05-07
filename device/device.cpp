@@ -1,6 +1,6 @@
 #include "device.hpp"
 
-LightBulb::LightBulb(int id, bool on, int intensity, Color color) : id(id), on(on), intensity(intensity), color(color){
+LightBulb::LightBulb(int id, bool on, int intensity, int color) : id(id), on(on), intensity(intensity), color(static_cast<Color>(color)){
     id = id;
     on = on;
     intensity = intensity;
@@ -35,7 +35,8 @@ int LightBulb::getIntensity() const {
     return intensity;
 }
 
-void LightBulb::setColor(Color newColor) {
+void LightBulb::setColor(int selectColor) {
+    Color newColor = static_cast<Color>(selectColor);
     color = newColor;
 }
 
