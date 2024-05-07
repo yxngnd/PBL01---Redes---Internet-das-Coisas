@@ -1,6 +1,6 @@
 #ifndef LIGHT_BULB_HPP
 #define LIGHT_BULB_HPP
-
+// Definição da classe do dispositivo
 #include <iostream>
 #include <string>
 

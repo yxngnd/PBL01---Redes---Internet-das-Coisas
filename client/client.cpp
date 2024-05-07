@@ -20,10 +20,12 @@ namespace http = boost::beast::http;
 
 using json = nlohmann::json;
 
+// Pega host da variavel de ambiente
 std::string host = getenv("HOST");
 //std::string host = "127.0.0.1";
 std::string port =  "8080";
 
+// Função de exibição do menu
 void showMenu(){
     std::cout << "###Device Management###" << std::endl;
     std::cout << "[1] - Alterar Status (ligado/desligado) " << std::endl;
@@ -32,6 +34,7 @@ void showMenu(){
     std::cout << ">> " << std::endl;
 }
 
+// Função responsável por fazer a requisição GET
 json doGet() {
     try {
         asio::io_context io_context;
@@ -41,17 +44,19 @@ json doGet() {
         auto endpoints = resolver.resolve(host, port);
         asio::connect(socket, endpoints);
 
+        // Cria o request
         http::request<http::empty_body> request(http::verb::get, "/", 11);
         request.set(http::field::host, host);
         request.set(http::field::user_agent, "HTTP Client");
 
-        http::write(socket, request);
+        http::write(socket, request); // Escreve o request no endpoint
 
+        // Cria e lê a resposta
         boost::beast::flat_buffer buffer;
         http::response<http::string_body> response;
         http::read(socket, buffer, response);
 
-        // Converter o corpo da resposta JSON para um objeto JSON
+        // Converte o corpo da resposta JSON para um objeto JSON
         json jsonResponse = json::parse(response.body());
         return jsonResponse;
     } catch (std::exception& e) {
@@ -61,6 +66,7 @@ json doGet() {
     
 }
 
+// Função responsável por fazer a requisição POST
 void doPost(json requestJson) {
     try {
         asio::io_context io_context;
@@ -70,13 +76,10 @@ void doPost(json requestJson) {
         auto endpoints = resolver.resolve(host, port);
         asio::connect(socket, endpoints);
 
-        // Criar objeto JSON
         json requestData = requestJson;
-
-        // Serializar o objeto JSON em uma string
         std::string requestBody = requestData.dump();
 
-        // Construir a requisição HTTP
+        // Cria o request
         http::request<http::string_body> request(http::verb::post, "/", 11);
         request.set(http::field::host, host);
         request.set(http::field::user_agent, "HTTP Client");
@@ -84,17 +87,16 @@ void doPost(json requestJson) {
         request.body() = requestBody;
         request.prepare_payload();
 
-        // Enviar a requisição
+        // Escreve a requisição
         http::write(socket, request);
 
+        // Cria e lê a resposta
         boost::beast::flat_buffer buffer;
         http::response<http::string_body> response;
         http::read(socket, buffer, response);
 
-        // Converter o corpo da resposta JSON para um objeto JSON
         json jsonResponse = json::parse(response.body());
 
-        //std::cout << "Response received:\n" << jsonResponse.dump(4) << std::endl; // Imprime o JSON formatado
     } catch (std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
     }
@@ -135,21 +137,23 @@ void *showDevices(void *arg) {
         }
         std::cout << std::endl;
         // Esperar por um intervalo antes de obter os dados novamente
-        // Isso depende da frequência de atualização dos dispositivos no servidor
         showMenu();
-        sleep(2); // Por exemplo, atualiza a cada 5 segundos
+        sleep(2);
         
     }
     return nullptr;
 }
 
+// Função que roda o menu, exibe os comando e seleciona o comando, id e valor
 void *menu(void *arg) {
     while(true){
         json requestJson;
-        int selectId = 0;
+        int selectId;
         int command = -1;
         while(command != 0){
             std::cin >> command;
+            std::cout << "Para qual dispositivo enviar o comando? >> ";
+            std::cin >> selectId;
             switch(command) {
                 case 1: {
                     bool newState;
@@ -193,6 +197,7 @@ void *menu(void *arg) {
 
 int main() {
 
+    // Criação de threades de get e menu
     pthread_t getThread, menuThread;
     
     pthread_create(&getThread, NULL, showDevices, NULL);

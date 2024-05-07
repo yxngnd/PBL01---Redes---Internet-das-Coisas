@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 #include "device.hpp"
 
+// Pega host da variavel de ambiente
 const char * host = getenv("HOST");
 
 #define TCP_PORT 54321
@@ -18,6 +19,7 @@ const char * host = getenv("HOST");
 
 using json = nlohmann::json;
 
+// Função para atualizar o dispositivo com base no commando recebido
 void deviceUpdate(LightBulb *device, json data){
 
     int command = data["command"].get<int>();
@@ -54,26 +56,24 @@ void* sendUDP(void* device_ptr) {
 
     LightBulb *device = static_cast<LightBulb*>(device_ptr);
 
-    // Criação do socket
+    // Cria o socket
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) {
         perror("Erro ao abrir socket UDP para envio");
         pthread_exit(NULL);
     }
 
-    // Configuração do endereço do servidor UDP
+    // Configura o endereço do servidor UDP
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(UDP_PORT);
     serverAddr.sin_addr.s_addr = inet_addr(UDP_HOST);
 
     while (true) {
-        // Criando e populando um objeto JSON
         json data;
         data["id"] = device->getId();
         data["on"] = device->getOn();
         data["intensity"] = device->getIntensity();
         data["color"] = device->getColor();
-        // Convertendo o objeto JSON para uma string
         std::string jsonStr = data.dump();
 
         // Enviando dados via UDP
@@ -82,10 +82,10 @@ void* sendUDP(void* device_ptr) {
             continue; // Continua a solicitar entrada do usuário mesmo se o envio falhar
         }
 
-        sleep(2); // Espera 2 segundos antes de enviar o próximo JSON
+        sleep(2);
     }
 
-    // Fechar socket e finalizar thread
+    // Fecha o socket e finaliza a thread
     close(sockfd);
     pthread_exit(NULL);
 }
@@ -99,33 +99,30 @@ void* receiveTCP(void* device_ptr) {
 
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
+    // Configura o endereço do servidor TCP
     struct sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(TCP_PORT);
     serverAddr.sin_addr.s_addr = inet_addr(TCP_HOST);
 
     while (true) {
-        // Loop para tentar conectar até que a conexão seja estabelecida
+        // Tenta se conectar até que a conexão seja estabelecida
         while (connect(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
             perror("Erro ao conectar ao servidor TCP");
-            sleep(3); // Espera 3 segundos antes de tentar novamente
+            sleep(3);
         }
 
-        std::string jsonStr = "Recebido";
-        send(sockfd, jsonStr.c_str(), jsonStr.length(), 0);
-
+        // Fica o tempo todo pronto para receber comandos
         while (true) {
             int recvlen = recv(sockfd, buffer, MAX_BUFFER_SIZE, 0);
             if (recvlen > 0) {
                 buffer[recvlen] = '\0';
 
-                // Convertendo a string recebida para um objeto JSON
                 json receivedData = json::parse(buffer);
 
                 if(!(receivedData.empty())){
                     deviceUpdate(device, receivedData);
                 }
-                // Imprimindo o JSON recebido
                 std::cout << "JSON recebido: " << receivedData << std::endl;
             } 
             else if (recvlen == 0) {

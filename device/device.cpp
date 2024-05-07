@@ -1,5 +1,5 @@
 #include "device.hpp"
-
+// Implementação da classe do dispositivo
 LightBulb::LightBulb(int id, bool on, int intensity, int color) : id(id), on(on), intensity(intensity), color(static_cast<Color>(color)){
     id = id;
     on = on;

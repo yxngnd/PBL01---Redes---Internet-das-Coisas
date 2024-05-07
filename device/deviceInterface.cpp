@@ -4,7 +4,7 @@
 #include "device.hpp"
 #include "deviceComms.cpp"
 
-// Função para exibir o menu
+// Função de exibição do menu
 void showMenu() {
     std::cout << "###Device Management###" << std::endl;
     std::cout << "[1] - Alterar Status (ligado/desligado) " << std::endl;
@@ -13,6 +13,7 @@ void showMenu() {
     std::cout << ">> " << std::endl;
 }
 
+// Função que roda o menu, exibe os comando e seleciona o comando, id e valor
 void* menu(void* device_ptr){
     std::system("clear");
     LightBulb *device = static_cast<LightBulb*>(device_ptr);
@@ -62,14 +63,13 @@ int main(){
 
     pthread_t sendThread, receiveThread, menuThread;
 
-    // Criando threads de menu
+    // Crian thread de menu
     pthread_create(&menuThread, NULL, menu, &device);
  
-    // Criando threads para envio e recebimento
+    // Cria thread para envio e recebimento
     pthread_create(&sendThread, NULL, sendUDP, &device);
     pthread_create(&receiveThread, NULL, receiveTCP, &device);
 
-    // Esperar pelo término das threads
     pthread_join(sendThread, NULL);
     pthread_join(receiveThread, NULL);
     pthread_join(menuThread, NULL);

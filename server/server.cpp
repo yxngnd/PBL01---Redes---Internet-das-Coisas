@@ -24,20 +24,22 @@ namespace http = boost::beast::http;
 
 int idDevice = 0;
 
+// Struct de conexão que vai ser guardada no buffer
 struct Connection {
     int id;
     int sockfd;
     Connection(int _id, int _sockfd) : id(_id), sockfd(_sockfd) {}
 };
 
-int sockTCP = socket(AF_INET, SOCK_STREAM, 0);
-int sockUDP = socket(AF_INET, SOCK_DGRAM, 0);
+int sockTCP = socket(AF_INET, SOCK_STREAM, 0); // socket tcp
+int sockUDP = socket(AF_INET, SOCK_DGRAM, 0); // socket udp
 
 std::vector<Connection> conns;
 std::vector<json> devices;
 json commandData;
 int idCommand = 1;
 
+// Função para pegar o ip que o servidor está rodando
 void getIP(){
     char hostname[256];
     gethostname(hostname, sizeof(hostname));
@@ -50,27 +52,24 @@ void getIP(){
     std::cout << "Endereço IP da máquina: " << BROKER_IP << std::endl;
 }
 
+// Função para lidar com as requisições post
 void handlePostRequest(http::request<http::string_body>& request, tcp::socket& socket) {
     try {
-        // Verificar se o corpo da requisição está presente
+        
         if (request.body().empty()) {
             throw std::invalid_argument("Empty request body");
         }
 
-        // Parse JSON from request body
         json receivedData = json::parse(request.body());
 
-        // Perform some action with received data
-        // Here you can edit data or perform any other action based on the received data
         commandData = receivedData;
         sendTCP(receivedData["id"]);
 
-        // Prepare the JSON response
         json jsonResponse;
         jsonResponse["status"] = "success";
         jsonResponse["message"] = "Data successfully updated";
 
-        // Prepare the response message
+        // define a resposta
         http::response<http::string_body> response;
         response.version(request.version());
         response.result(http::status::ok);
@@ -79,17 +78,16 @@ void handlePostRequest(http::request<http::string_body>& request, tcp::socket& s
         response.body() = jsonResponse.dump();
         response.prepare_payload();
 
-        // Send the response to the client
+        // envia a resposta
         boost::beast::http::write(socket, response);
     } catch (const std::exception& e) {
         std::cerr << "Error handling POST request: " << e.what() << std::endl;
 
-        // Prepare an error JSON response
+        // define a resposta de erro
         json errorResponse;
         errorResponse["status"] = "error";
         errorResponse["message"] = "Error handling POST request";
 
-        // Prepare the response message
         http::response<http::string_body> response;
         response.version(request.version());
         response.result(http::status::bad_request);
@@ -98,26 +96,25 @@ void handlePostRequest(http::request<http::string_body>& request, tcp::socket& s
         response.body() = errorResponse.dump();
         response.prepare_payload();
 
-        // Send the error response to the client
+        // envia a mensagem de erro
         boost::beast::http::write(socket, response);
     }
 }
 
+// Função para lidar com as requisições get
 void handleGetRequest(http::request<http::string_body>& request, tcp::socket& socket) {
     try {
-        // Prepare some data to send
+
         json data;
         data["devices"] = devices;
 
-        // Check if data is empty
         if (data.empty()) {
             throw std::runtime_error("No data available");
         }
 
-        // Convert data to JSON string
         std::string jsonData = data.dump();
 
-        // Prepare the response message
+        // define a resposta com os dispositivos
         http::response<http::string_body> response;
         response.version(request.version());
         response.result(http::status::ok);
@@ -126,17 +123,16 @@ void handleGetRequest(http::request<http::string_body>& request, tcp::socket& so
         response.body() = jsonData;
         response.prepare_payload();
 
-        // Send the response to the client
+        // envia a resposta
         boost::beast::http::write(socket, response);
     } catch (const std::exception& e) {
         std::cerr << "Error handling GET request: " << e.what() << std::endl;
 
-        // Prepare an error JSON response
+        // mesma coisa do post
         json errorResponse;
         errorResponse["status"] = "error";
         errorResponse["message"] = "Error handling POST request";
 
-        // Prepare an error response
         http::response<http::string_body> response;
         response.version(request.version());
         response.result(http::status::internal_server_error);
@@ -145,19 +141,18 @@ void handleGetRequest(http::request<http::string_body>& request, tcp::socket& so
         response.body() = errorResponse.dump();
         response.prepare_payload();
 
-        // Send the error response to the client
         boost::beast::http::write(socket, response);
     }
 }
 
+// função para identificar o tipo de requisição
 void handleRequest(http::request<http::string_body>& request, tcp::socket& socket) {
-    // Check HTTP method
     if (request.method() == http::verb::post) {
         handlePostRequest(request, socket);
     } else if (request.method() == http::verb::get) {
         handleGetRequest(request, socket);
     } else {
-        // Unsupported HTTP method
+        // Caso seja uma requisição inesperada
         http::response<http::string_body> response;
         response.version(request.version());
         response.result(http::status::bad_request);
@@ -166,11 +161,11 @@ void handleRequest(http::request<http::string_body>& request, tcp::socket& socke
         response.body() = "Unsupported HTTP method";
         response.prepare_payload();
 
-        // Send the response to the client
         boost::beast::http::write(socket, response);
     }
 }
 
+// roda o servidor http
 void* runServer(void* arg) {
     boost::asio::io_context io_context;
     tcp::acceptor acceptor(io_context, {tcp::v4(), 8080});
@@ -179,20 +174,18 @@ void* runServer(void* arg) {
         tcp::socket socket(io_context);
         acceptor.accept(socket);
 
-        // Read the HTTP request
         boost::beast::flat_buffer buffer;
         http::request<http::string_body> request;
         boost::beast::http::read(socket, buffer, request);
 
-        // Handle the request
         handleRequest(request, socket);
 
-        // Close the socket
         socket.shutdown(tcp::socket::shutdown_send);
     }
     pthread_exit(NULL);
 }
 
+// função para verificar se a conexão ja existe na lista
 bool connectionExists(int sockfd) {
     for (Connection conn : conns) {
         if (sockfd == conn.sockfd) {
@@ -202,7 +195,7 @@ bool connectionExists(int sockfd) {
     return false;
 }
 
-// Função para aceitar conexões de clientes
+// Função para estabelecer conexões de clientes
 void* establishConnections(void* arg) {
     int newsockTCP;
     struct sockaddr_in serverAddr, clientAddr;
@@ -210,29 +203,29 @@ void* establishConnections(void* arg) {
 
 
     while (true) {
-        // Criação do socket
         if (sockTCP < 0) {
             perror("Erro ao abrir socket TCP para recebimento");
-            sleep(3); // Tentar novamente após 3 segundos
+            sleep(3);
             continue;
         }
-        // Configuração do endereço do servidor TCP
+
+        // Configura o endereço do servidor TCP
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_port = htons(TCP_PORT);
         serverAddr.sin_addr.s_addr = inet_addr(BROKER_IP);
 
-        // Associação do socket ao endereço do servidor TCP
         bind(sockTCP, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
+
         // Escutar conexões
         if (listen(sockTCP, 5) < 0) {
             perror("Erro ao escutar por conexões TCP");
             close(sockTCP);
-            sleep(3); // Tentar novamente após 3 segundos
+            sleep(3);
             continue;
         }
+
         // Aceitar conexões
         clientLen = sizeof(clientAddr);
-        
         newsockTCP = accept(sockTCP, (struct sockaddr*)&clientAddr, &clientLen);
         
         // Recebimento de dados
@@ -244,30 +237,29 @@ void* establishConnections(void* arg) {
             sendTCP(newConn.id);
             commandData = json();
             idDevice++;
-            // Fechar sockets e aguardar 3 segundos antes de tentar reconectar
-            //sleep(3); // Tentar novamente após 3 segundos
+            //sleep(3);
                 
         }
     }
     pthread_exit(NULL);
 }
 
+// Função para enviar via TCP
 void sendTCP(int id) {
     int sendConn;
+    // pega a conexão com base no id recebido como parametro
     for (Connection conn : conns) {
         if (id == conn.id) {
             sendConn = conn.sockfd;
             break;
         }
     }
+    
     if(!(commandData.empty())){
-        // Criando e populando um objeto JSON
         json sendData = commandData;
 
-        // Convertendo o objeto JSON para uma string
         std::string jsonStr = sendData.dump();
 
-        // Enviando dados via TCP
         send(sendConn, jsonStr.c_str(), jsonStr.length(), 0);
         commandData = json();
     }
@@ -279,7 +271,6 @@ void* receiveUDP(void* arg) {
     socklen_t clientLen;
     char buffer[MAX_BUFFER_SIZE];
 
-    // Criação do socket
     if (sockUDP < 0) {
         perror("Erro ao abrir socket UDP para recebimento");
         pthread_exit(NULL);
@@ -290,7 +281,6 @@ void* receiveUDP(void* arg) {
     serverAddr.sin_port = htons(UDP_PORT);
     serverAddr.sin_addr.s_addr = inet_addr(BROKER_IP);
 
-    // Associação do socket ao endereço do servidor UDP
     if (bind(sockUDP, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
         perror("Erro ao associar socket ao endereço UDP");
         close(sockUDP);
@@ -304,9 +294,9 @@ void* receiveUDP(void* arg) {
         if (recvlen > 0) {
             buffer[recvlen] = '\0';
 
-            // Convertendo a string recebida para um objeto JSON
             json receivedData = json::parse(buffer);
 
+            // verifica se ja existe um dispositivo cadastrado com o id
             if(receivedData["id"] > (- 1)){
                 bool idFind = false;
                 if(devices.empty()){
@@ -314,7 +304,7 @@ void* receiveUDP(void* arg) {
                 }
                 for (auto& device : devices) {
                     if (device["id"] == receivedData["id"]) {
-                        device = receivedData; // Substituir o JSON existente pelo novo JSON
+                        device = receivedData; 
                         idFind = true;
                         break;
                     }
@@ -336,7 +326,6 @@ void* receiveUDP(void* arg) {
         }
     }
 
-    // Fechar socket e finalizar thread
     close(sockUDP);
     pthread_exit(NULL);
 }
