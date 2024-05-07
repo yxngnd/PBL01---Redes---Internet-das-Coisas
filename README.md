@@ -92,7 +92,7 @@ O protocolo HTTP define os padrões para troca de dados entre programas de aplic
 | Protocolo     | Envio         | Resposta      |Partes envolvidas|
 | ------------- | ------------- | ------------- | ------------- | 
 | HTTP - GET    |      "/"      | {"devices:"[{id, on, intensity, color}...]}           |  Aplicação -> Broker  |
-| HTTP- POST    |"/" - {id, comand, value}      | {Sucesso/Falha}           |     Aplicação -> Broker     |
+| HTTP- POST    |"/" - {id, command, value}      | {Sucesso/Falha}           |     Aplicação -> Broker     |
 | UDP           | {id, on, intensity, color}  | -           | Dispositivo -> Broker|
 | TCP           | {command, value}  | -           | Broker -> Dispositivo|
 
