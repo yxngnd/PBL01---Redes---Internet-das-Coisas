@@ -63,7 +63,7 @@ A solução é dividida em três partes: aplicação, broker e dispositivo, ilus
 - **Figura 1:** *Diagrama da solução do problema.*
 
 ### Aplicação
-A aplicação é uma interface acessada por meio da linha de comando (CLI), usada para gerenciar, tanto receber e exibir os dados dos dispositivos, quanto enviar comandos de alteração dos atributos do dispositivo. A aplicação faz requisições HTTP para a API do servidor.
+A aplicação é uma interface acessada por meio da linha de comando (CLI), usada para gerenciar, tanto receber e exibir os dados dos dispositivos, quanto enviar comandos de alteração dos atributos do dispositivo. A aplicação faz requisições *HTTP* para a API do servidor.
 
 ### Server
 O servidor é onde está contido a parte principal do produto, se comunica com a aplicação lidando com as requisições feitas e com o dispositivo através de comunicação TCP, para enviar comando ao dispositivo, e UDP para receber os dados do dispositivo em formato JSON e armazená-los num buffer para que os dados de todos os dispositivos conectados ao servidor sejam enviados à aplicação quando ela faz uma requisição.
@@ -73,18 +73,64 @@ O dispositivo funciona como um simulador de uma lâmpada inteligente, possuindo 
 
 ## Arquitetura da Solução
 
+Para que houvesse um bom funcionamento do sistema, a comunicação e a troca de mensagen entre aplicação e servidor, também servidor e dispositivo, a comunicação foi organizada da seguinte forma:
+
+**Inicialização:** O servidor é o primeiro a ser inicializado, pois é necessário que um ip seja associado ao servidor, esse ip será utilizado para inicializar o dispositivo e a aplicação, garantindo que a parte *broker* esteja funcionando. Ao mesmo tempo, o servidor estará rodando a função que lida com as requisições *HTTP*.
+
+**Comunicação com dispositivos:** Após a inicialização, o servidor fica escutando as portas TCP e UDP, na comunicação TCP, o servidor escutará até que uma conexão seja aceita e estabelecida, o servidor então verificará se a conexão já existe e caso não exista, guardará a conexão junto com um id gerado numa lista de conexões, esse id gerado é enviado e designado ao dispositivo via TCP para que o cadastro seja completo. Já na comunicação UDP, o servidor fica o tempo todo recebendo dados dos dispositivos conectados, após receber os dados, ele verifica se o id do dispositivo ja existe, caso não exista adiciona a lista e caso exista o substitui.
+
+**Lidando com requisições HTTP:** O servidor fica o tempo todo esperando por requisições, ao receber uma requisição, o servidor primeiro lida com ela, identificando o tipo de requisição e repassando-a para o método correspondente. Ao receber uma requisição *GET* o servidor envia como resposta uma lista de dispositivos contendo todos os dispositivos conectados. E ao receber uma requisição *POST*, o servidor trata o comando recebido e o envia ao dispositivo correspondente, enviando como resposta uma mensagem de confirmação. Ambos possuem tratamento para caso algo impeça a requisição se ser bem sucedida.
 
 ## Protocolo de Comunicação
 
+Para que houvesse uma comunicação entre dispositivos e servidor(broker) foram utilizados em nível de transporte os protocolos Transmission Control Protocol(TCP) e User Datagram Protocol(UDP) e em nível de aplicação foi utilizado o Hypertext Transfer Protocol(HTTP). 
+
+O protocolo TCP permite uma troca de dados confiável entre as partes conectadas, pois exige que haja uma conexão entre elas. O protocolo UDP não tem essa preocupação e permite que os dados sem enviados para o destino sem se preocupar se os dados realmente chegarão.
+
+O protocolo HTTP define os padrões para troca de dados entre programas de aplicação, essenciais para comunicação feita entre aplicaçãos em diferentes dispositivos.
+
+| Protocolo     | Envio         | Resposta      |Partes envolvidas|
+| ------------- | ------------- | ------------- | ------------- | 
+| HTTP - GET    |      "/"      | {"devices:"[{id, on, intensity, color}...]}           |  Aplicação -> Broker  |
+| HTTP- POST    |"/" - {id, comand, value}      | {Sucesso/Falha}           |     Aplicação -> Broker     |
+| UDP           | {id, on, intensity, color}  | -           | Dispositivo -> Broker|
+| TCP           | {command, value}  | -           | Broker -> Dispositivo|
+
+A tabela expõe os protocolos utilizados e quem os utiliza. O protocolo HTTP é utilizado para fazer requisições ao *broker*
+
 
 ## API Restful
+A tabela abaixo mostra as rotas da aplicação, o método e para que elas são utilizadas.
+
+| Rota          | Método        | Descrição     |
+| ------------- | ------------- | ------------- |
+| "/"           |      GET      | Recebe como resposta os dispositivos conectados ao broker              |
+| "/"           |      POST     | Envia ao broker um comando para alterar um atributo do dispositivo              |
+
+## Conexões simultâneas e Dados
 
 
-## Conexões e Dados
+### Threads
+Threads são utilizadas para tornar sistemas mais eficientes ao permitir que várias tarefas sejam executadas simultaneamente em um programa.
 
+No dispositivo existem três *threads*, uma para enviar dados em UDP, outra para receber comandos via TCP e a última para que a interface de gerenciamento do dispositivo. Se fez necessário o uso de *threads* pois era preciso que o programa continuasse recebendo comandos via TCP enquanto o menu de gerenciamento estivesse ativo, além de, por decisão de projeto, o dispositivo deve enviar a todo momento deus dados para o broker, ao invés de enviar somente quando editado.
+
+O servidor também possui três *threads*, a primeira para que o broker fique a todo momento tentando estabelecer conexões com novos dispositivos via TCP, enquando a segunda recebe dados via UDP, e por último, mantenha ativo a parte que recebe e lida com as requisições HTTP.
+
+A aplicação possui duas threads, uma para manter o menu de gerenciamento dos dispositivos conectados e outra para ficar a todo momento solicitando a lista de dispositivos cadastrados.
+
+### Dados
+Toda a comunicação é baseada no uso de JSON, uma estrutura textual que permite enviar mais de uma informação no mesmo dado, os dados enviados por requisições HTTP e os enviados ao dispositivo via TCP possuem estrutura semelhante, permitindo que o mesmo dado seja apenas repassado sem necessidade de modificação, também, os dados que chegam do dispositivo podem ser enviados diretamente à aplicação, pois são feitos num formato que permite que o tratamento para exibição seja feita na aplicação.
 
 ## Gerenciamento do Dispositivo
-
+O gerenciamento do dispositivo foi feito de forma que os dados podem ser alterados em ambas as interfaces, possuindo comandos de alteração de cada um dos dados, com exceção do id que é único e só é alterado no seu cadastro no broker, os dados alterados na interface do dispositivo são atualizados no broker, enviados e exibidos na aplicação e os dados alterados na aplicação são enviados para o broker e repassados ao dispositivo que por sua vez envia atualizado ao broker. 
 
 ## Desempenho e Confiabilidade
+
+### Formas de melhorar o desempenho
+Para melhora do desempenho, a solução possui uma lista de uma estrutura chamada `Connection`, que armazena o id e a conexão TCP do dispositivo, permitindo haja uma busca rápida pelos dispositivos já cadastrados. Outra estrutura importante é a lista de dispositivos, que funciona como uma cache, fazendo com que ao receber uma requisição, o broker não precise pedir os dados do dispositivo, eles já estão registrados nessa cache. Os comandos também são armazenados numa espécie de cache única, que armazena um único comando, que é recebido, tratado, enviado e limpo.
+
+### Tratamento de conexões
+
+Em todos os processos das conexões feitas existem tratamentos que impedem que ocorram erros indesejados, onde, quando não é possível que uma parte do processo de conexão seja feito, o broker continua tentando e verificando se a conexão foi bem sucedida, isso possibilita que conexões sejam reestabelecidas após serem perdidas.
 
