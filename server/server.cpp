@@ -47,7 +47,6 @@ void getIP(){
 
     char* ip = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
     BROKER_IP = ip;
-    std::cout << "Endereço IP da máquina: " << ip << std::endl;
     std::cout << "Endereço IP da máquina: " << BROKER_IP << std::endl;
 }
 
