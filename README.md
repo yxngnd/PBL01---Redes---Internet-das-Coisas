@@ -93,8 +93,8 @@ O protocolo HTTP define os padrões para troca de dados entre programas de aplic
 | ------------- | ------------- | ------------- | ------------- | 
 | HTTP - GET    |      "/"      | {"devices:"[{id, on, intensity, color}...]}           |  Aplicação -> Broker  |
 | HTTP- POST    |"/" - {id, command, value}      | {Sucesso/Falha}           |     Aplicação -> Broker     |
-| UDP           | {id, on, intensity, color}  | -           | Dispositivo -> Broker|
-| TCP           | {command, value}  | -           | Broker -> Dispositivo|
+| UDP           | -  |{id, on, intensity, color}| Dispositivo -> Broker|
+| TCP           | -  | {command, value} | Broker -> Dispositivo|
 
 A tabela expõe os protocolos utilizados e quem os utiliza. O protocolo HTTP é utilizado para fazer requisições ao *broker*
 
